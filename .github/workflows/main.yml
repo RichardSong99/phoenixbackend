@@ -25,19 +25,19 @@ jobs:
       uses: aws-actions/amazon-ecr-login@v1
 
     - name: Build, tag, and push image to Amazon ECR
-    id: build-image
-    env:
-      ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-      ECR_REPOSITORY: phoenixecr  # replace with your ECR repository name
-      IMAGE_TAG: ${{ github.sha }}
-    run: |
-      docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG . --progress=plain
-      docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-      echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+      id: build-image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: phoenixecr  # replace with your ECR repository name
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG . --progress=plain
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
 
     - name: Set up kubeconfig
       run: |
-              aws eks update-kubeconfig --region us-east-1 --name phoenixeks  # replace with your AWS region and EKS cluster name
+            aws eks update-kubeconfig --region us-east-1 --name phoenixeks  # replace with your AWS region and EKS cluster name
 
     - name: Deploy to EKS
       run: kubectl apply -f deployment.yaml
