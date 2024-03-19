@@ -38,8 +38,8 @@ jobs:
     - name: Set up kubeconfig
       uses: aws-actions/amazon-eks-set-kubeconfig@v1
       with:
-        cluster-name: my-cluster-name  # replace with your EKS cluster name
-        role-arn: arn:aws:iam::123456789012:role/my-role  # replace with the ARN of your IAM role
+        cluster-name: phoenixeks  # replace with your EKS cluster name
+        role-arn: arn:aws:iam::723355352356:role/eksClusterService  # replace with the ARN of your IAM role
 
     - name: Deploy to EKS
       run: kubectl apply -f deployment.yaml
