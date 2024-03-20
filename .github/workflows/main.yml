@@ -48,6 +48,9 @@ jobs:
         sudo mv kubectl /usr/local/bin/
     - name: Check kubectl version
       run: kubectl version --client
+    - name: Inspect kubeconfig
+      run: |
+        cat ~/.kube/config
     - name: Check kubeconfig
       run: |
         kubectl config view
