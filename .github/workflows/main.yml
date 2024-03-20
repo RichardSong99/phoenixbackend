@@ -50,6 +50,7 @@ jobs:
       run: kubectl version --client
     - name: Check kubeconfig
       run: |
+        kubectl config view
         kubectl config current-context
         kubectl config get-contexts   
     - name: Verify connection to Kubernetes cluster
