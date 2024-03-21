@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"example/goserver/datacube"
 	"example/goserver/engagement"
 	"example/goserver/lessons"
@@ -20,18 +21,40 @@ import (
 	"os"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/secretsmanager"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 func main() {
 	// Load environment variables
-	err := godotenv.Load()
+	sess, err := session.NewSession(&aws.Config{
+		Region: aws.String("us-east-1")},
+	)
 	if err != nil {
-		log.Fatal("Error loading .env file in main")
+		log.Fatal(err)
+	}
+
+	svc := secretsmanager.New(sess)
+
+	input := &secretsmanager.GetSecretValueInput{
+		SecretId: aws.String("phoenixsecrets"),
+	}
+
+	result, err := svc.GetSecretValue(input)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var secrets map[string]string
+	json.Unmarshal([]byte(*result.SecretString), &secrets)
+
+	for key, value := range secrets {
+		os.Setenv(key, value)
 	}
 
 	// Set up MongoDB client
