@@ -12,6 +12,7 @@ spec:
       labels:
         app: my-app
     spec:
+      serviceAccountName: default
       containers:
       - name: my-app
         image: my-app:1.0.0
