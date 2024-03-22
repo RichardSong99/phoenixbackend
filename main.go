@@ -33,8 +33,9 @@ import (
 func main() {
 	// Load environment variables
 	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String("us-east-1")},
-	)
+		Region:                        aws.String("us-east-1"),
+		CredentialsChainVerboseErrors: aws.Bool(true), // Enable verbose logging for credential chain errors
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
