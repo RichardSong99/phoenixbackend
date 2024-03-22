@@ -52,7 +52,7 @@ jobs:
 
     - name: Annotate service account
       run: | 
-        kubecctl annotate serviceaccount -n default default eks.amazonaws.com/role-arn=arn:aws:iam::723355352356:role/EKS_OIDC_Access
+        kubectl annotate serviceaccount -n default default eks.amazonaws.com/role-arn=arn:aws:iam::723355352356:role/EKS_OIDC_Access
     
     - name: Inspect kubeconfig
       run: |
