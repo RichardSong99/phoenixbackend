@@ -20,9 +20,7 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: us-east-1  # replace with your AWS region
     
-    - name: Set up kubeconfig
-      run: |
-        aws eks update-kubeconfig --region us-east-1 --name myphoenixcluster  # replace with your AWS region and EKS cluster name
+
     
     - name: Login to Amazon ECR
       id: login-ecr
@@ -47,6 +45,14 @@ jobs:
     
     - name: Check kubectl version
       run: kubectl version --client
+
+    - name: Set up kubeconfig
+      run: |
+        aws eks update-kubeconfig --region us-east-1 --name myphoenixcluster  # replace with your AWS region and EKS cluster name
+
+    - name: Annotate service account
+      run: | 
+        kubecctl annotate serviceaccount -n default default eks.amazonaws.com/role-arn=arn:aws:iam::723355352356:role/EKS_OIDC_Access
     
     - name: Inspect kubeconfig
       run: |
