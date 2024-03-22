@@ -47,9 +47,6 @@ jobs:
     
     - name: Check kubectl version
       run: kubectl version --client
-
-    - name: Annotate Kubernetes service account
-      run: kubectl annotate serviceaccount default arn:aws:iam::723355352356:user/RichardSong
     
     - name: Inspect kubeconfig
       run: |
