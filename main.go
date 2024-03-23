@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"example/goserver/datacube"
 	"example/goserver/engagement"
 	"example/goserver/lessons"
@@ -21,42 +20,46 @@ import (
 	"os"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/secretsmanager"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 func main() {
 	// Load environment variables
-	sess, err := session.NewSession(&aws.Config{
-		Region:                        aws.String("us-east-1"),
-		CredentialsChainVerboseErrors: aws.Bool(true), // Enable verbose logging for credential chain errors
-	})
+	err := godotenv.Load()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Error loading .env file in main")
 	}
+	// // Load environment variables
+	// sess, err := session.NewSession(&aws.Config{
+	// 	Region:                        aws.String("us-east-1"),
+	// 	CredentialsChainVerboseErrors: aws.Bool(true), // Enable verbose logging for credential chain errors
+	// })
 
-	svc := secretsmanager.New(sess)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
-	input := &secretsmanager.GetSecretValueInput{
-		SecretId: aws.String("phoenixsecrets"),
-	}
+	// svc := secretsmanager.New(sess)
 
-	result, err := svc.GetSecretValue(input)
-	if err != nil {
-		log.Fatal(err)
-	}
+	// input := &secretsmanager.GetSecretValueInput{
+	// 	SecretId: aws.String("phoenixsecrets"),
+	// }
 
-	var secrets map[string]string
-	json.Unmarshal([]byte(*result.SecretString), &secrets)
+	// result, err := svc.GetSecretValue(input)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
-	for key, value := range secrets {
-		os.Setenv(key, value)
-	}
+	// var secrets map[string]string
+	// json.Unmarshal([]byte(*result.SecretString), &secrets)
+
+	// for key, value := range secrets {
+	// 	os.Setenv(key, value)
+	// }
 
 	// Set up MongoDB client
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
