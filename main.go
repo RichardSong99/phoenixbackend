@@ -36,34 +36,6 @@ func main() {
 		}
 	}
 
-	// // Load environment variables
-	// sess, err := session.NewSession(&aws.Config{
-	// 	Region:                        aws.String("us-east-1"),
-	// 	CredentialsChainVerboseErrors: aws.Bool(true), // Enable verbose logging for credential chain errors
-	// })
-
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-
-	// svc := secretsmanager.New(sess)
-
-	// input := &secretsmanager.GetSecretValueInput{
-	// 	SecretId: aws.String("phoenixsecrets"),
-	// }
-
-	// result, err := svc.GetSecretValue(input)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-
-	// var secrets map[string]string
-	// json.Unmarshal([]byte(*result.SecretString), &secrets)
-
-	// for key, value := range secrets {
-	// 	os.Setenv(key, value)
-	// }
-
 	// Set up MongoDB client
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(os.Getenv("ATLAS_URI")))
@@ -171,6 +143,12 @@ func main() {
 
 	test.RegisterRoutes(publicRoutes, testService, quizService, questionService, engagementService)
 
+	// Determine the port to listen on
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080" // Default to port 8080 for local development
+	}
+
 	// Start server
-	router.Run(":8080")
+	router.Run(":" + port)
 }
