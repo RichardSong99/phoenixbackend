@@ -29,10 +29,13 @@ import (
 
 func main() {
 	// Load environment variables
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file in main")
+	if _, err := os.Stat(".env"); err == nil {
+		err := godotenv.Load()
+		if err != nil {
+			log.Fatal("Error loading .env file in main")
+		}
 	}
+
 	// // Load environment variables
 	// sess, err := session.NewSession(&aws.Config{
 	// 	Region:                        aws.String("us-east-1"),
