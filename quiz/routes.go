@@ -262,7 +262,9 @@ func GetQuizzesUnderlyingForUser(ctx context.Context, service *QuizService, ques
 		return nil, fmt.Errorf("invalid user ID: %v", err)
 	}
 
-	quizzes, err := service.GetQuizzesForUser(ctx, userIDObj)
+	quizType := "quiz"
+
+	quizzes, err := service.GetQuizzesForUser(ctx, userIDObj, quizType)
 	if err != nil {
 		return nil, err
 	}
@@ -380,7 +382,9 @@ func getQuizzesForUser(service *QuizService) gin.HandlerFunc {
 			}
 			userIDObj = &userIDObjTemp
 
-			quizzes, err := service.GetQuizzesForUser(c, *userIDObj)
+			quizType := "quiz"
+
+			quizzes, err := service.GetQuizzesForUser(c, *userIDObj, quizType)
 
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

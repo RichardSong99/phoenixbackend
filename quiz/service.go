@@ -106,9 +106,14 @@ func (qs *QuizService) GetQuizByName(ctx context.Context, name string, userID pr
 	return &quiz, nil
 }
 
-func (qs *QuizService) GetQuizzesForUser(ctx context.Context, userID primitive.ObjectID) ([]*Quiz, error) {
+func (qs *QuizService) GetQuizzesForUser(ctx context.Context, userID primitive.ObjectID, quizType string) ([]*Quiz, error) {
 	// Create a filter to find the quizzes for the user
 	filter := bson.M{"user_id": userID}
+
+	// if quizType is not empty, add it to the filter
+	if quizType != "" {
+		filter["type"] = quizType
+	}
 
 	// Sort the quizzes by attempt time, with the earliest attempt time first
 	opts := options.Find().SetSort(bson.D{{"attempt_time", 1}})
