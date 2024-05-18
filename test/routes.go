@@ -5,6 +5,7 @@ import (
 	"example/goserver/parameterdata"
 	"example/goserver/question"
 	"example/goserver/quiz"
+	"strconv"
 
 	"fmt"
 	"net/http"
@@ -17,9 +18,11 @@ func RegisterRoutes(publicRouter *gin.RouterGroup, service *TestService, quizSer
 	publicRouter.GET("/test", getTestByName(service))
 	publicRouter.GET("/test/:id", getTestByID(service))
 	publicRouter.POST("/test", createTest(service))
+	publicRouter.GET("/createalltests", createAllTests(service, quizService))
 	publicRouter.PATCH("test/:id", updateTest(service))
 	publicRouter.GET("/tests", getTestsForUser(service))
 	publicRouter.GET("/test/:id/underlying", getTestUnderlying(service, quizService, questionService, engagementService))
+
 }
 
 func getTestByName(service *TestService) gin.HandlerFunc {
@@ -106,9 +109,9 @@ func createTest(service *TestService) gin.HandlerFunc {
 			quizIDListObjIDs[i] = objID
 		}
 
-		for _, id := range quizIDListObjIDs {
-			fmt.Println("quiz ID", id)
-		}
+		// for _, id := range quizIDListObjIDs {
+		// 	fmt.Println("quiz ID", id)
+		// }
 
 		insertResult, err := service.CreateTest(c, quizIDListObjIDs, requestData.Name, userIDObj)
 		if err != nil {
@@ -194,7 +197,13 @@ func getTestUnderlying(service *TestService, quizService *quiz.QuizService, ques
 		//create array of quiz.QuizResult objects
 		quizResults := make([]quiz.QuizResult, len(*quizIDList))
 		for i, quizID := range *quizIDList {
-			quizResult, err := quiz.GetQuizUnderlying(c, quizService, questionService, engagementService, quizID)
+			quiz, err := quizService.GetQuiz(c, quizID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
+			quizResult, err := quizService.GetQuizUnderlying(c, quizService, questionService, engagementService, *quiz)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
@@ -331,4 +340,53 @@ func getTestUnderlying(service *TestService, quizService *quiz.QuizService, ques
 
 		c.JSON(http.StatusOK, gin.H{"test": test, "quizResults": quizResults, "testStats": testStats, "mathScaled": mathScaled, "readingScaled": readingScaled, "totalScaled": totalScaled})
 	}
+}
+
+func createAllTests(service *TestService, quizService *quiz.QuizService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, exists := c.Get("userID")
+		if !exists {
+			c.JSON(http.StatusOK, gin.H{"message": "User not logged in"})
+			return
+		}
+
+		userIDObj, err := primitive.ObjectIDFromHex(userID.(string))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid user ID"})
+			return
+		}
+
+		// iterate through Tests from parameterdata and create them
+		// Iterate through Tests from parameterdata and create them
+		for _, test := range parameterdata.Tests {
+			_, err := service.CreateTestFromRepresentation(c, *test, userIDObj, quizService)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "All tests created successfully"})
+	}
+}
+
+func (s *TestService) CreateTestFromRepresentation(c *gin.Context, testRepresentation parameterdata.TestRepresentation, userIDObj primitive.ObjectID, quizService *quiz.QuizService) (primitive.ObjectID, error) {
+	quizIDListObjIDs := make([]primitive.ObjectID, len(testRepresentation.QuestionLists))
+	for i, questionList := range testRepresentation.QuestionLists {
+		quizName := testRepresentation.Name + " - Module " + strconv.Itoa(i+1)
+		quizType := "test"
+		quizID, err := quizService.InitializeQuizHelper(c, questionList, &quizType, &quizName)
+		if err != nil {
+			return primitive.NilObjectID, err
+		}
+
+		quizIDListObjIDs[i] = quizID
+	}
+
+	testID, err := s.CreateTest(c, quizIDListObjIDs, testRepresentation.Name, userIDObj)
+	if err != nil {
+		return primitive.NilObjectID, err
+	}
+
+	return testID, nil
 }

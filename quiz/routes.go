@@ -2,6 +2,7 @@ package quiz
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -21,6 +22,7 @@ func RegisterRoutes(publicRouter *gin.RouterGroup, service *QuizService, questio
 	publicRouter.GET("/quiz", getQuiz(service))
 	publicRouter.GET("/quiz/:id/underlying", getQuizUnderlying(service, questionService, engagementService))
 	publicRouter.GET("/quizzes", getQuizzesForUser(service))
+	publicRouter.GET("quizzes/underlying", getQuizzesUnderlyingForUser(service, questionService, engagementService))
 }
 
 func initializeQuiz(service *QuizService) gin.HandlerFunc {
@@ -40,45 +42,13 @@ func initializeQuiz(service *QuizService) gin.HandlerFunc {
 			return
 		}
 
-		userID, exists := c.Get("userID")
-		var userIDObj *primitive.ObjectID
-
-		if !exists {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "User not logged in"})
-			return
-		}
-
-		// Convert userID to *primitive.ObjectID
-		userIDObjTemp, err := primitive.ObjectIDFromHex(userID.(string))
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID"})
-			return
-		}
-		userIDObj = &userIDObjTemp
-
-		// fmt.Println("userID", userIDObj)
-
-		//convert questionIDs to ObjectIDs
-		questionIDsObjIDs := make([]primitive.ObjectID, len(requestData.QuestionIDList))
-		for i, id := range requestData.QuestionIDList {
-			questionIDObjID, err := primitive.ObjectIDFromHex(id)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid question ID"})
-				return
-			}
-			questionIDsObjIDs[i] = questionIDObjID
-		}
-
-		if requestData.Type == nil {
-			requestData.Type = new(string)
-		}
-
-		if requestData.Name == nil {
-			name := time.Now().Format("2006-01-02 15:04:05")
-			requestData.Name = &name
-		}
-
-		quizID, err := service.InitializeQuiz(c, questionIDsObjIDs, *userIDObj, requestData.Type, requestData.Name)
+		// Call InitializeQuizHelper to initialize the quiz
+		quizID, err := service.InitializeQuizHelper(
+			c.Request.Context(), // Pass the request context to the helper function
+			requestData.QuestionIDList,
+			requestData.Type,
+			requestData.Name,
+		)
 
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -87,7 +57,45 @@ func initializeQuiz(service *QuizService) gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, gin.H{"quizID": quizID})
 	}
+}
 
+func (s *QuizService) InitializeQuizHelper(c context.Context, questionIDList []string, quizType *string, quizName *string) (primitive.ObjectID, error) {
+	userID, exists := c.Value("userID").(string)
+	if !exists {
+		return primitive.NilObjectID, errors.New("user ID not found in context")
+	}
+
+	// Convert userID to *primitive.ObjectID
+	userIDObj, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return primitive.NilObjectID, fmt.Errorf("invalid user ID: %v", err)
+	}
+
+	// Convert questionIDs to ObjectIDs
+	questionIDsObjIDs := make([]primitive.ObjectID, len(questionIDList))
+	for i, id := range questionIDList {
+		questionIDObjID, err := primitive.ObjectIDFromHex(id)
+		if err != nil {
+			return primitive.NilObjectID, fmt.Errorf("invalid question ID: %v", err)
+		}
+		questionIDsObjIDs[i] = questionIDObjID
+	}
+
+	if quizType == nil {
+		quizType = new(string)
+	}
+
+	if quizName == nil {
+		name := time.Now().Format("2006-01-02 15:04:05")
+		quizName = &name
+	}
+
+	quizID, err := s.InitializeQuiz(c, questionIDsObjIDs, userIDObj, quizType, quizName)
+	if err != nil {
+		return primitive.NilObjectID, fmt.Errorf("failed to initialize quiz: %v", err)
+	}
+
+	return quizID, nil
 }
 
 func updateQuiz(service *QuizService) gin.HandlerFunc {
@@ -213,7 +221,13 @@ func getQuizUnderlying(service *QuizService, questionService *question.QuestionS
 			return
 		}
 
-		result, err := GetQuizUnderlying(c, service, questionService, engagementService, quizID)
+		quiz, err := service.GetQuiz(c, quizID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		result, err := service.GetQuizUnderlying(c, service, questionService, engagementService, *quiz)
 
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -224,11 +238,48 @@ func getQuizUnderlying(service *QuizService, questionService *question.QuestionS
 	}
 }
 
-func GetQuizUnderlying(ctx context.Context, service *QuizService, questionService *question.QuestionService, engagementService *engagement.EngagementService, quizID primitive.ObjectID) (*QuizResult, error) {
-	quiz, err := service.GetQuiz(ctx, quizID)
+func getQuizzesUnderlyingForUser(service *QuizService, questionService *question.QuestionService, engagementService *engagement.EngagementService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		results, err := GetQuizzesUnderlyingForUser(c, service, questionService, engagementService)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, results)
+	}
+}
+
+func GetQuizzesUnderlyingForUser(ctx context.Context, service *QuizService, questionService *question.QuestionService, engagementService *engagement.EngagementService) ([]*QuizResult, error) {
+	userID, exists := ctx.Value("userID").(string)
+	if !exists {
+		return nil, errors.New("user ID not found in context")
+	}
+
+	// Convert userID to *primitive.ObjectID
+	userIDObj, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user ID: %v", err)
+	}
+
+	quizzes, err := service.GetQuizzesForUser(ctx, userIDObj)
 	if err != nil {
 		return nil, err
 	}
+
+	results := make([]*QuizResult, len(quizzes))
+	for i, quiz := range quizzes {
+		result, err := service.GetQuizUnderlying(ctx, service, questionService, engagementService, *quiz)
+		if err != nil {
+			return nil, err
+		}
+		results[i] = result
+	}
+
+	return results, nil
+}
+
+func (s *QuizService) GetQuizUnderlying(ctx context.Context, service *QuizService, questionService *question.QuestionService, engagementService *engagement.EngagementService, quiz Quiz) (*QuizResult, error) {
 
 	questions := make([]question.Question, len(quiz.QuestionIDList))
 
@@ -298,7 +349,7 @@ func GetQuizUnderlying(ctx context.Context, service *QuizService, questionServic
 	}
 
 	return &QuizResult{
-		Quiz:            quiz,
+		Quiz:            &quiz,
 		Questions:       questionEngagementCombos,
 		NumTotal:        numTotal,
 		NumAnswered:     numAnswered,
