@@ -1,6 +1,7 @@
 package test
 
 import (
+	"example/goserver/quiz"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -16,11 +17,20 @@ type Test struct {
 }
 
 type TestStats struct {
-	StatList []SmallStats `json:"StatList"`
+	Stats []SmallStats `json:"Stats"`
 }
 
 type SmallStats struct {
 	Name    string `json:"Name"`
 	Total   int    `json:"Total"`
 	Correct int    `json:"Correct"`
+}
+
+type TestResult struct {
+	Test          *Test
+	QuizResults   []quiz.QuizResult
+	TestStats     *TestStats
+	MathScaled    float64
+	ReadingScaled float64
+	TotalScaled   float64
 }

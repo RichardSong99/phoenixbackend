@@ -262,7 +262,7 @@ func GetQuizzesUnderlyingForUser(ctx context.Context, service *QuizService, ques
 		return nil, fmt.Errorf("invalid user ID: %v", err)
 	}
 
-	quizType := "quiz"
+	var quizType *string = nil
 
 	quizzes, err := service.GetQuizzesForUser(ctx, userIDObj, quizType)
 	if err != nil {
@@ -382,7 +382,7 @@ func getQuizzesForUser(service *QuizService) gin.HandlerFunc {
 			}
 			userIDObj = &userIDObjTemp
 
-			quizType := "quiz"
+			var quizType *string = nil
 
 			quizzes, err := service.GetQuizzesForUser(c, *userIDObj, quizType)
 
