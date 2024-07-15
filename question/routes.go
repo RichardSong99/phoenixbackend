@@ -216,14 +216,15 @@ func getQuestionStatistics(questionService *QuestionService) gin.HandlerFunc {
 
 func getQuestions(userService *user.UserService, questionService *QuestionService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		difficulty := c.Query("difficulty")
 		topic := c.Query("topic")
+		difficulty := c.Query("difficulty")
+		answerStatus := c.Query("answerStatus")
+		answerType := c.Query("answerType")
+
 		subject := c.Query("subject")
 
-		sortDifficulty := c.Query("sortDifficulty") // no default value
-		sortTopic := c.Query("sortTopic")           // no default value
-		sortStatus := c.Query("sortStatus")         // no default value
-		sortAttemptTime := c.Query("sortAttemptTime")
+		sortOption := c.Query("sortOption")
+		sortDirection := c.Query("sortDirection")
 
 		// Get page and pageSize parameters from query string
 		pageStr := c.DefaultQuery("page", "1")
@@ -261,14 +262,7 @@ func getQuestions(userService *user.UserService, questionService *QuestionServic
 			userIDObj = &userIDObjTemp
 		}
 
-		// Get status parameters from query string
-		includeUnattempted, _ := strconv.ParseBool(c.DefaultQuery("unattempted", "true"))
-		includeIncorrect, _ := strconv.ParseBool(c.DefaultQuery("incorrect", "true"))
-		includeOmitted, _ := strconv.ParseBool(c.DefaultQuery("omitted", "true"))
-		includeCorrect, _ := strconv.ParseBool(c.DefaultQuery("correct", "true"))
-		includeFlagged, _ := strconv.ParseBool(c.DefaultQuery("flagged", "true"))
-
-		questions, totalQuestions, err := questionService.GetQuestions(c, difficulty, topic, skip, pageSize, userTier, userIDObj, subject, includeUnattempted, includeIncorrect, includeOmitted, includeCorrect, includeFlagged, sortDifficulty, sortTopic, sortStatus, sortAttemptTime)
+		questions, totalQuestions, err := questionService.GetQuestions(c, difficulty, topic, answerStatus, answerType, skip, pageSize, userTier, userIDObj, subject, sortOption, sortDirection)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

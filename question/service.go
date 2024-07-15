@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -87,13 +88,9 @@ func (s *QuestionService) GetQuestionsByID(ctx context.Context, questionids []pr
 	pipeline = append(pipeline, s.createInitialPipeline()...)
 
 	// Add the facet stage to the pipeline
-	includeUnattempted := true
-	includeIncorrect := true
-	includeOmitted := true
-	includeCorrect := true
-	includeFlagged := true
+	answerStatus := "unattempted,incorrect,omitted,correct,flagged"
 
-	pipeline = s.addFacetStageToPipeline(pipeline, userID, includeUnattempted, includeIncorrect, includeOmitted, includeCorrect, includeFlagged)
+	pipeline = s.addFacetStageToPipeline(pipeline, userID, answerStatus)
 	pipeline = s.addProjectionStage(pipeline)
 
 	results, err := s.executePipeline(ctx, pipeline)
@@ -118,8 +115,10 @@ func (s *QuestionService) GetQuestionsByID(ctx context.Context, questionids []pr
 func (s *QuestionService) GetDifficultyStatistics(ctx context.Context, userID *primitive.ObjectID) (interface{}, error) {
 	pipeline := s.createInitialPipeline()
 
+	answerStatus := "unattempted,incorrect,omitted,correct,flagged"
+
 	if userID != nil {
-		pipeline = s.addFacetStageToPipeline(pipeline, userID, true, true, true, true, true)
+		pipeline = s.addFacetStageToPipeline(pipeline, userID, answerStatus)
 	}
 
 	difficultyPipeline := s.createDifficultyPipeline(pipeline)
@@ -134,8 +133,10 @@ func (s *QuestionService) GetDifficultyStatistics(ctx context.Context, userID *p
 func (s *QuestionService) GetStatusStatistics(ctx context.Context, userID *primitive.ObjectID) (interface{}, error) {
 	pipeline := s.createInitialPipeline()
 
+	answerStatus := "unattempted,incorrect,omitted,correct,flagged"
+
 	if userID != nil {
-		pipeline = s.addFacetStageToPipeline(pipeline, userID, true, true, true, true, true)
+		pipeline = s.addFacetStageToPipeline(pipeline, userID, answerStatus)
 	}
 
 	statusPipeline := s.createStatusPipeline(pipeline)
@@ -150,8 +151,10 @@ func (s *QuestionService) GetStatusStatistics(ctx context.Context, userID *primi
 func (s *QuestionService) GetCombinedStatistics(ctx context.Context, userID *primitive.ObjectID) ([]dataaggregation.TopicStat, error) {
 	pipeline := s.createInitialPipeline()
 
+	answerStatus := "unattempted,incorrect,omitted,correct,flagged"
+
 	if userID != nil {
-		pipeline = s.addFacetStageToPipeline(pipeline, userID, true, true, true, true, true)
+		pipeline = s.addFacetStageToPipeline(pipeline, userID, answerStatus)
 	}
 
 	combinedPipeline := s.createCombinedPipeline(pipeline)
@@ -166,8 +169,10 @@ func (s *QuestionService) GetCombinedStatistics(ctx context.Context, userID *pri
 func (s *QuestionService) GetCombinedCubeStatistics(ctx context.Context, userID *primitive.ObjectID) ([]dataaggregation.TopicAggregation, error) {
 	pipeline := s.createInitialPipeline()
 
+	answerStatus := "unattempted,incorrect,omitted,correct,flagged"
+
 	if userID != nil {
-		pipeline = s.addFacetStageToPipeline(pipeline, userID, true, true, true, true, true)
+		pipeline = s.addFacetStageToPipeline(pipeline, userID, answerStatus)
 	}
 
 	combinedPipeline := s.createCombinedCubePipeline(pipeline)
@@ -182,8 +187,10 @@ func (s *QuestionService) GetCombinedCubeStatistics(ctx context.Context, userID 
 func (s *QuestionService) GetTimeStatistics(ctx context.Context, userID *primitive.ObjectID) (interface{}, error) {
 	pipeline := s.createInitialPipeline()
 
+	answerStatus := "unattempted,incorrect,omitted,correct,flagged"
+
 	if userID != nil {
-		pipeline = s.addFacetStageToPipeline(pipeline, userID, true, true, true, true, true)
+		pipeline = s.addFacetStageToPipeline(pipeline, userID, answerStatus)
 	}
 
 	timePipeline := s.createTimePipeline(pipeline)
@@ -194,59 +201,6 @@ func (s *QuestionService) GetTimeStatistics(ctx context.Context, userID *primiti
 
 	return timeResults, nil
 }
-
-// func (s *QuestionService) GetQuestionStatistics(ctx context.Context, userID *primitive.ObjectID) (map[string]interface{}, error) {
-// 	pipeline := s.createInitialPipeline()
-
-// 	includeUnattempted := true
-// 	includeIncorrect := true
-// 	includeOmitted := true
-// 	includeCorrect := true
-// 	includeFlagged := true
-
-// 	if userID != nil {
-
-// 		pipeline = s.addFacetStageToPipeline(pipeline, userID, includeUnattempted, includeIncorrect, includeOmitted, includeCorrect, includeFlagged)
-// 	}
-
-// 	difficultyPipeline := s.createDifficultyPipeline(pipeline)
-// 	statusPipeline := s.createStatusPipeline(pipeline)
-// 	combinedPipeline := s.createCombinedPipeline(pipeline)
-// 	timePipeline := s.createTimePipeline(pipeline)
-// 	// fmt.Println("Difficulty Pipeline: ", difficultyPipeline)
-// 	// fmt.Println("Status Pipeline: ", statusPipeline)
-
-// 	// Run the pipelines separately
-// 	difficultyResults, err := s.executeStatsPipeline(ctx, difficultyPipeline)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	statusResults, err := s.executeStatsPipeline(ctx, statusPipeline)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	combinedResults, err := s.executeStatsPipeline(ctx, combinedPipeline)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	timeResults, err := s.executeStatsPipeline(ctx, timePipeline)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	// Combine the results into a single map
-// 	statistics := map[string]interface{}{
-// 		"difficulty": difficultyResults,
-// 		"status":     statusResults,
-// 		"combined":   combinedResults,
-// 		"time":       timeResults,
-// 	}
-
-// 	return statistics, nil
-// }
 
 func (s *QuestionService) createDifficultyPipeline(pipeline []bson.M) []bson.M {
 	difficultyPipeline := []bson.M{
@@ -654,17 +608,17 @@ func (s *QuestionService) executeCombinedCubeStatsPipeline(ctx context.Context, 
 
 // GetQuestions retrieves questions from the database
 // based on the provided difficulty, topic, and limit
-func (s *QuestionService) GetQuestions(ctx context.Context, difficulties string, topics string, skip, pageSize int64, userTier string, userID *primitive.ObjectID, subject string, includeUnattempted, includeIncorrect, includeOmitted, includeCorrect, includeFlagged bool, sortDifficulty string, sortTopic string, sortStatus string, sortAttemptTime string) ([]*QuestionWithStatus, int64, error) {
-	filter := s.createFilter(difficulties, topics, subject)
+func (s *QuestionService) GetQuestions(ctx context.Context, difficulties string, topics string, answerStatus string, answerType string, skip, pageSize int64, userTier string, userID *primitive.ObjectID, subject string, sortOption string, sortDirection string) ([]*QuestionWithStatus, int64, error) {
+	filter := s.createFilter(difficulties, topics, answerType, subject)
 	pipeline := s.createInitialPipeline()
 
 	if userID != nil {
-		pipeline = s.addFacetStageToPipeline(pipeline, userID, includeUnattempted, includeIncorrect, includeOmitted, includeCorrect, includeFlagged)
+		pipeline = s.addFacetStageToPipeline(pipeline, userID, answerStatus)
 	}
 
 	fmt.Println("Pipeline: ", pipeline)
 
-	pipeline = s.addMatchAndSortStagesToPipeline(pipeline, filter, sortTopic, sortDifficulty, sortStatus, sortAttemptTime)
+	pipeline = s.addMatchAndSortStagesToPipeline(pipeline, filter, sortOption, sortDirection)
 
 	countPipeline := make([]bson.M, len(pipeline))
 	copy(countPipeline, pipeline)
@@ -688,7 +642,7 @@ func (s *QuestionService) GetQuestions(ctx context.Context, difficulties string,
 	return results, totalQuestions, nil
 }
 
-func (s *QuestionService) createFilter(difficulties string, topics string, subject string) bson.M {
+func (s *QuestionService) createFilter(difficulties string, topics string, answerType string, subject string) bson.M {
 	filter := bson.M{}
 	if difficulties != "" {
 		difficultySlice := strings.Split(strings.ToLower(difficulties), ",")
@@ -697,6 +651,10 @@ func (s *QuestionService) createFilter(difficulties string, topics string, subje
 	if topics != "" {
 		topicSlice := strings.Split(topics, ",")
 		filter["topic"] = bson.M{"$in": topicSlice}
+	}
+	if answerType != "" {
+		answerTypeSlice := strings.Split(answerType, ",")
+		filter["answer_type"] = bson.M{"$in": answerTypeSlice}
 	}
 	if subject != "" {
 		filter["subject"] = subject
@@ -732,7 +690,15 @@ func (s *QuestionService) createInitialPipeline() []bson.M {
 	}
 }
 
-func (s *QuestionService) addFacetStageToPipeline(pipeline []bson.M, userID *primitive.ObjectID, includeUnattempted, includeIncorrect, includeOmitted, includeCorrect, includeFlagged bool) []bson.M {
+func (s *QuestionService) addFacetStageToPipeline(pipeline []bson.M, userID *primitive.ObjectID, answerStatus string) []bson.M {
+
+	// if answerStatus includes "unattempted", then includeUnattempted is true
+	includeUnattempted := strings.Contains(answerStatus, "unattempted")
+	includeCorrect := strings.Contains(answerStatus, "correct")
+	includeIncorrect := strings.Contains(answerStatus, "incorrect")
+	includeOmitted := strings.Contains(answerStatus, "omitted")
+	includeFlagged := strings.Contains(answerStatus, "flagged")
+
 	facetStage := constructFacetStage(userID)
 
 	if len(facetStage["$facet"].(bson.M)) > 0 {
@@ -785,42 +751,32 @@ func (s *QuestionService) addFacetStageToPipeline(pipeline []bson.M, userID *pri
 	return pipeline
 }
 
-func (s *QuestionService) addMatchAndSortStagesToPipeline(pipeline []bson.M, filter bson.M, sortTopic string, sortDifficulty string, sortStatus string, sortAttemptTime string) []bson.M {
+func (s *QuestionService) addMatchAndSortStagesToPipeline(pipeline []bson.M, filter bson.M, sortOption string, sortDirection string) []bson.M {
 	pipeline = append(pipeline, bson.M{"$match": filter})
 
 	// Add sort stage to the pipeline
 	sortStage := bson.M{}
 
-	if sortTopic != "" {
-		if sortTopic == "asc" {
-			sortStage["topic"] = 1
-		} else if sortTopic == "desc" {
-			sortStage["topic"] = -1
-		}
+	sortText := ""
+
+	if sortOption == "topic" {
+		sortText = "topic"
+	} else if sortOption == "difficulty" {
+		sortText = "difficultyLevel"
+	} else if sortOption == "answerStatus" {
+		sortText = "status"
+	} else if sortOption == "attemptTime" {
+		sortText = "first_attempt_time"
 	}
 
-	if sortDifficulty != "" {
-		if sortDifficulty == "asc" {
-			sortStage["difficultyLevel"] = 1
-		} else if sortDifficulty == "desc" {
-			sortStage["difficultyLevel"] = -1
-		}
+	sortDirectionInt, err := strconv.Atoi(sortDirection)
+
+	if err != nil {
+		sortDirectionInt = 1
 	}
 
-	if sortStatus != "" {
-		if sortStatus == "asc" {
-			sortStage["status"] = 1
-		} else if sortStatus == "desc" {
-			sortStage["status"] = -1
-		}
-	}
-
-	if sortAttemptTime != "" {
-		if sortAttemptTime == "asc" {
-			sortStage["first_attempt_time"] = 1
-		} else if sortAttemptTime == "desc" {
-			sortStage["first_attempt_time"] = -1
-		}
+	if sortText != "" {
+		sortStage[sortText] = sortDirectionInt
 	}
 
 	if len(sortStage) > 0 {
