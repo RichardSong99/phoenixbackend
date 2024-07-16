@@ -653,7 +653,7 @@ func (s *QuestionService) GetQuestions(ctx context.Context, difficulties string,
 
 	pipeline = s.addPagination(pipeline, skip, pageSize)
 
-	pipeline = s.addProjectionStage(pipeline)
+	// pipeline = s.addProjectionStage(pipeline)
 
 	fmt.Println("Pipeline: ", pipeline)
 
