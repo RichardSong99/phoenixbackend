@@ -300,64 +300,6 @@ func updateAllQuestions(questionService *QuestionService) gin.HandlerFunc {
 	}
 }
 
-// func getMaskedQuestions(userService *user.UserService) gin.HandlerFunc {
-// 	return func(c *gin.Context) {
-// 		// Retrieve questions using existing functionality
-// 		difficulty := c.Query("difficulty")
-// 		topic := c.Query("topic")
-// 		limitStr := c.Query("limit")
-
-// 		var limit int64
-// 		if limitStr != "" {
-// 			var err error
-// 			limit, err = strconv.ParseInt(limitStr, 10, 64)
-// 			if err != nil {
-// 				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid limit"})
-// 				return
-// 			}
-// 		}
-
-// 		// Attempt to get user ID from JWT token
-// 		// userTier := getUserTier(c, userService)
-
-// 		fullQuestions, err := questionService.GetQuestions(c, difficulty, topic, limit, "paid")
-// 		if err != nil {
-// 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-// 			return
-// 		}
-
-// 		// Define the fields to include in the response
-// 		projectionFields := []string{"ID", "Prompt", "Difficulty", "Topic", "AccessOption", "AnswerType"}
-
-// 		// Create a slice of masked questions
-// 		var maskedQuestions []bson.M
-// 		for _, q := range fullQuestions {
-// 			questionValue := reflect.ValueOf(q).Elem() // Get the value of the question struct
-// 			questionType := reflect.TypeOf(q).Elem()   // Get the type of the question struct
-
-// 			maskedQuestion := bson.M{}
-
-// 			for _, fieldName := range projectionFields {
-// 				fieldVal := questionValue.FieldByName(fieldName) // Get the field value from the struct
-// 				if fieldVal.IsValid() {                          // Skip if field is not valid
-// 					structField, ok := questionType.FieldByName(fieldName) // Get the struct field
-// 					if !ok {
-// 						continue // Skip if field name not found in the struct
-// 					}
-
-// 					jsonTag := structField.Tag.Get("json")               // Get the json tag
-// 					jsonFieldName := strings.Split(jsonTag, ",")[0]      // Get the json field name
-// 					maskedQuestion[jsonFieldName] = fieldVal.Interface() // Add the field to the masked question
-// 				}
-// 			}
-
-// 			maskedQuestions = append(maskedQuestions, maskedQuestion)
-// 		}
-
-// 		c.JSON(http.StatusOK, maskedQuestions)
-// 	}
-// }
-
 // updateQuestion handles the PUT /questions/:id route
 func updateQuestion(c *gin.Context) {
 	// Parse the ID

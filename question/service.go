@@ -85,7 +85,7 @@ func (s *QuestionService) GetQuestionsByID(ctx context.Context, questionids []pr
 	}
 
 	// Add the other stages to the pipeline
-	pipeline = append(pipeline, s.createInitialPipeline()...)
+	pipeline = append(pipeline, s.createInitialPipeline(userID)...)
 
 	// Add the facet stage to the pipeline
 	answerStatus := "unattempted,incorrect,omitted,correct,flagged"
@@ -113,7 +113,7 @@ func (s *QuestionService) GetQuestionsByID(ctx context.Context, questionids []pr
 }
 
 func (s *QuestionService) GetDifficultyStatistics(ctx context.Context, userID *primitive.ObjectID) (interface{}, error) {
-	pipeline := s.createInitialPipeline()
+	pipeline := s.createInitialPipeline(userID)
 
 	answerStatus := "unattempted,incorrect,omitted,correct,flagged"
 
@@ -131,7 +131,7 @@ func (s *QuestionService) GetDifficultyStatistics(ctx context.Context, userID *p
 }
 
 func (s *QuestionService) GetStatusStatistics(ctx context.Context, userID *primitive.ObjectID) (interface{}, error) {
-	pipeline := s.createInitialPipeline()
+	pipeline := s.createInitialPipeline(userID)
 
 	answerStatus := "unattempted,incorrect,omitted,correct,flagged"
 
@@ -149,7 +149,7 @@ func (s *QuestionService) GetStatusStatistics(ctx context.Context, userID *primi
 }
 
 func (s *QuestionService) GetCombinedStatistics(ctx context.Context, userID *primitive.ObjectID) ([]dataaggregation.TopicStat, error) {
-	pipeline := s.createInitialPipeline()
+	pipeline := s.createInitialPipeline(userID)
 
 	answerStatus := "unattempted,incorrect,omitted,correct,flagged"
 
@@ -167,7 +167,7 @@ func (s *QuestionService) GetCombinedStatistics(ctx context.Context, userID *pri
 }
 
 func (s *QuestionService) GetCombinedCubeStatistics(ctx context.Context, userID *primitive.ObjectID) ([]dataaggregation.TopicAggregation, error) {
-	pipeline := s.createInitialPipeline()
+	pipeline := s.createInitialPipeline(userID)
 
 	answerStatus := "unattempted,incorrect,omitted,correct,flagged"
 
@@ -185,7 +185,7 @@ func (s *QuestionService) GetCombinedCubeStatistics(ctx context.Context, userID 
 }
 
 func (s *QuestionService) GetTimeStatistics(ctx context.Context, userID *primitive.ObjectID) (interface{}, error) {
-	pipeline := s.createInitialPipeline()
+	pipeline := s.createInitialPipeline(userID)
 
 	answerStatus := "unattempted,incorrect,omitted,correct,flagged"
 
@@ -608,17 +608,40 @@ func (s *QuestionService) executeCombinedCubeStatsPipeline(ctx context.Context, 
 
 // GetQuestions retrieves questions from the database
 // based on the provided difficulty, topic, and limit
-func (s *QuestionService) GetQuestions(ctx context.Context, difficulties string, topics string, answerStatus string, answerType string, skip, pageSize int64, userTier string, userID *primitive.ObjectID, subject string, sortOption string, sortDirection string) ([]*QuestionWithStatus, int64, error) {
-	filter := s.createFilter(difficulties, topics, answerType, subject)
-	pipeline := s.createInitialPipeline()
+func (s *QuestionService) GetQuestions(ctx context.Context, difficulties string, topics string, answerStatus string, answerType string, skip, pageSize int64, userTier string, userID *primitive.ObjectID, subject string, sortOption string, sortDirection string) ([]bson.M, int64, error) {
 
+	filter := s.createFilter(difficulties, topics, answerType, subject)
+
+	// Create the initial pipeline with the match stage
+	pipeline := []bson.M{
+		{"$match": filter},
+	}
+
+	// add user engagement filter
 	if userID != nil {
-		pipeline = s.addFacetStageToPipeline(pipeline, userID, answerStatus)
+		pipeline = s.addUserEngagementFilter(pipeline, userID)
+	}
+
+	// add difficulty levels
+	pipeline = s.addDifficultyLevelsToPipeline(pipeline)
+
+	// pipeline := s.createInitialPipeline(userID)
+
+	// if userID != nil {
+	// 	pipeline = s.addFacetStageToPipeline(pipeline, userID, answerStatus)
+	// }
+
+	pipeline = s.addAnswerStatusToPipeline(pipeline)
+
+	fmt.Println("answerStatus: ", answerStatus)
+
+	if answerStatus != "" {
+		pipeline = s.addAnswerStatusFilterToPipeline(pipeline, answerStatus)
 	}
 
 	fmt.Println("Pipeline: ", pipeline)
 
-	pipeline = s.addMatchAndSortStagesToPipeline(pipeline, filter, sortOption, sortDirection)
+	pipeline = s.addMatchAndSortStagesToPipeline(pipeline, sortOption, sortDirection)
 
 	countPipeline := make([]bson.M, len(pipeline))
 	copy(countPipeline, pipeline)
@@ -634,7 +657,7 @@ func (s *QuestionService) GetQuestions(ctx context.Context, difficulties string,
 
 	fmt.Println("Pipeline: ", pipeline)
 
-	results, err := s.executePipeline(ctx, pipeline)
+	results, err := s.executePipelineGeneric(ctx, pipeline)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -662,7 +685,67 @@ func (s *QuestionService) createFilter(difficulties string, topics string, answe
 	return filter
 }
 
-func (s *QuestionService) createInitialPipeline() []bson.M {
+func (s *QuestionService) addUserEngagementFilter(pipeline []bson.M, userID *primitive.ObjectID) []bson.M {
+	pipeline = append(pipeline,
+		bson.M{
+			"$lookup": bson.M{
+				"from":         "engagements",
+				"localField":   "_id",
+				"foreignField": "question_id",
+				"as":           "engagements",
+			},
+		},
+		bson.M{
+			"$addFields": bson.M{
+				"engagements": bson.M{
+					"$filter": bson.M{
+						"input": "$engagements",
+						"as":    "engagement",
+						"cond": bson.M{
+							"$eq": []interface{}{"$$engagement.user_id", userID},
+						},
+					},
+				},
+			},
+		},
+	)
+
+	return pipeline
+}
+
+func (s *QuestionService) addDifficultyLevelsToPipeline(pipeline []bson.M) []bson.M {
+	pipeline = append(pipeline, bson.M{
+		"$addFields": bson.M{
+			"difficultyLevel": bson.M{
+				"$switch": bson.M{
+					"branches": []bson.M{
+						{
+							"case": bson.M{"$eq": bson.A{"$difficulty", "easy"}},
+							"then": 1,
+						},
+						{
+							"case": bson.M{"$eq": bson.A{"$difficulty", "medium"}},
+							"then": 2,
+						},
+						{
+							"case": bson.M{"$eq": bson.A{"$difficulty", "hard"}},
+							"then": 3,
+						},
+						{
+							"case": bson.M{"$eq": bson.A{"$difficulty", "extreme"}},
+							"then": 4,
+						},
+					},
+					"default": 0,
+				},
+			},
+		},
+	})
+
+	return pipeline
+}
+
+func (s *QuestionService) createInitialPipeline(userID *primitive.ObjectID) []bson.M {
 	return []bson.M{
 		{
 			"$lookup": bson.M{
@@ -674,20 +757,79 @@ func (s *QuestionService) createInitialPipeline() []bson.M {
 		},
 		{
 			"$addFields": bson.M{
+				"engagements": bson.M{
+					"$filter": bson.M{
+						"input": "$engagements",
+						"as":    "engagement",
+						"cond": bson.M{
+							"$eq": []interface{}{"$$engagement.user_id", userID},
+						},
+					},
+				},
+			},
+		},
+		{
+			"$addFields": bson.M{
 				"difficultyLevel": bson.M{
 					"$switch": bson.M{
 						"branches": []bson.M{
-							{"case": bson.M{"$eq": []interface{}{"$difficulty", "easy"}}, "then": 1},
-							{"case": bson.M{"$eq": []interface{}{"$difficulty", "medium"}}, "then": 2},
-							{"case": bson.M{"$eq": []interface{}{"$difficulty", "hard"}}, "then": 3},
-							{"case": bson.M{"$eq": []interface{}{"$difficulty", "extreme"}}, "then": 4},
+							{
+								"case": bson.M{"$eq": bson.A{"$difficulty", "easy"}},
+								"then": 1,
+							},
+							{
+								"case": bson.M{"$eq": bson.A{"$difficulty", "medium"}},
+								"then": 2,
+							},
+							{
+								"case": bson.M{"$eq": bson.A{"$difficulty", "hard"}},
+								"then": 3,
+							},
+							{
+								"case": bson.M{"$eq": bson.A{"$difficulty", "extreme"}},
+								"then": 4,
+							},
 						},
 						"default": 0,
 					},
 				},
 			},
 		},
+		// Continue building the pipeline as needed
 	}
+}
+
+func (s *QuestionService) addAnswerStatusToPipeline(pipeline []bson.M) []bson.M {
+	pipeline = append(pipeline, bson.M{
+		"$project": bson.M{
+			"question": "$$ROOT",
+			"status": bson.M{
+				"$cond": bson.M{
+					"if": bson.M{
+						"$eq": bson.A{bson.M{"$size": "$engagements"}, 0}, // If engagements is empty
+					}, "then": "unattempted",
+					"else": bson.M{
+						"$arrayElemAt": bson.A{"$engagements.status", 0},
+					},
+				},
+			},
+		},
+	})
+
+	return pipeline
+}
+
+func (s *QuestionService) addAnswerStatusFilterToPipeline(pipeline []bson.M, answerStatus string) []bson.M {
+	selectedAnswerStatusArray := strings.Split(answerStatus, ",")
+	filter := bson.M{
+		"status": bson.M{
+			"$in": selectedAnswerStatusArray,
+		},
+	}
+
+	pipeline = append(pipeline, bson.M{"$match": filter})
+
+	return pipeline
 }
 
 func (s *QuestionService) addFacetStageToPipeline(pipeline []bson.M, userID *primitive.ObjectID, answerStatus string) []bson.M {
@@ -751,8 +893,8 @@ func (s *QuestionService) addFacetStageToPipeline(pipeline []bson.M, userID *pri
 	return pipeline
 }
 
-func (s *QuestionService) addMatchAndSortStagesToPipeline(pipeline []bson.M, filter bson.M, sortOption string, sortDirection string) []bson.M {
-	pipeline = append(pipeline, bson.M{"$match": filter})
+func (s *QuestionService) addMatchAndSortStagesToPipeline(pipeline []bson.M, sortOption string, sortDirection string) []bson.M {
+	// pipeline = append(pipeline, bson.M{"$match": filter})
 
 	// Add sort stage to the pipeline
 	sortStage := bson.M{}
@@ -834,6 +976,21 @@ func (s *QuestionService) addProjectionStage(pipeline []bson.M) []bson.M {
 	})
 
 	return pipeline
+}
+
+func (s *QuestionService) executePipelineGeneric(ctx context.Context, pipeline []bson.M) ([]bson.M, error) {
+	cursor, err := s.collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var results []bson.M
+	if err = cursor.All(ctx, &results); err != nil {
+		return nil, err
+	}
+
+	return results, nil
 }
 
 func (s *QuestionService) executePipeline(ctx context.Context, pipeline []bson.M) ([]*QuestionWithStatus, error) {
