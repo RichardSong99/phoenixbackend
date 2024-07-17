@@ -16,6 +16,8 @@ type Question struct {
 	AccessOption          *string             `bson:"access_option,omitempty" json:"AccessOption,omitempty"`
 	Explanation           *string             `bson:"explanation,omitempty" json:"Explanation,omitempty"`
 	Images                *[]Image            `bson:"images,omitempty" json:"Images,omitempty"`
+	CreationDate          *string             `bson:"creation_date,omitempty" json:"CreationDate,omitempty"`
+	LastEditedDate        *string             `bson:"last_edited_date,omitempty" json:"LastEditedDate,omitempty"`
 }
 
 type Image struct {
