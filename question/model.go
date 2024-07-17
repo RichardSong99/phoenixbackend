@@ -1,6 +1,10 @@
 package question
 
-import "go.mongodb.org/mongo-driver/bson/primitive"
+import (
+	"time"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
+)
 
 type Question struct {
 	ID                    *primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
@@ -16,8 +20,8 @@ type Question struct {
 	AccessOption          *string             `bson:"access_option,omitempty" json:"AccessOption,omitempty"`
 	Explanation           *string             `bson:"explanation,omitempty" json:"Explanation,omitempty"`
 	Images                *[]Image            `bson:"images,omitempty" json:"Images,omitempty"`
-	CreationDate          *string             `bson:"creation_date,omitempty" json:"CreationDate,omitempty"`
-	LastEditedDate        *string             `bson:"last_edited_date,omitempty" json:"LastEditedDate,omitempty"`
+	CreationDate          time.Time           `bson:"creation_date,omitempty" json:"CreationDate,omitempty"`
+	LastEditedDate        time.Time           `bson:"last_edited_date,omitempty" json:"LastEditedDate,omitempty"`
 }
 
 type Image struct {
