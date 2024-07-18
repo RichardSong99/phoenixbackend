@@ -622,24 +622,21 @@ func (s *QuestionService) GetQuestions(ctx context.Context, difficulties string,
 		pipeline = s.addUserEngagementFilter(pipeline, userID)
 	}
 
+	pipeline = s.addFirstAttemptTimeToPipeline(pipeline)
+	fmt.Println("Pipeline after add first attempt time: ", pipeline)
+
 	// add difficulty levels
 	pipeline = s.addDifficultyLevelsToPipeline(pipeline)
 
-	// pipeline := s.createInitialPipeline(userID)
-
-	// if userID != nil {
-	// 	pipeline = s.addFacetStageToPipeline(pipeline, userID, answerStatus)
-	// }
-
 	pipeline = s.addAnswerStatusToPipeline(pipeline)
 
-	fmt.Println("answerStatus: ", answerStatus)
+	// fmt.Println("answerStatus: ", answerStatus)
 
 	if answerStatus != "" {
 		pipeline = s.addAnswerStatusFilterToPipeline(pipeline, answerStatus)
 	}
 
-	fmt.Println("Pipeline: ", pipeline)
+	// fmt.Println("Pipeline: ", pipeline)
 
 	pipeline = s.addMatchAndSortStagesToPipeline(pipeline, sortOption, sortDirection)
 
@@ -737,6 +734,22 @@ func (s *QuestionService) addDifficultyLevelsToPipeline(pipeline []bson.M) []bso
 						},
 					},
 					"default": 0,
+				},
+			},
+		},
+	})
+
+	return pipeline
+}
+
+func (s *QuestionService) addFirstAttemptTimeToPipeline(pipeline []bson.M) []bson.M {
+	pipeline = append(pipeline, bson.M{
+		"$addFields": bson.M{
+			"first_attempt_time": bson.M{
+				"$cond": bson.M{
+					"if":   bson.M{"$gt": bson.A{bson.M{"$size": "$engagements"}, 0}},
+					"then": bson.M{"$arrayElemAt": bson.A{"$engagements.attempt_time", 0}},
+					"else": nil,
 				},
 			},
 		},
@@ -901,14 +914,12 @@ func (s *QuestionService) addMatchAndSortStagesToPipeline(pipeline []bson.M, sor
 
 	sortText := ""
 
-	if sortOption == "topic" {
-		sortText = "topic"
-	} else if sortOption == "difficulty" {
-		sortText = "difficultyLevel"
-	} else if sortOption == "answerStatus" {
-		sortText = "status"
-	} else if sortOption == "attemptTime" {
-		sortText = "first_attempt_time"
+	if sortOption == "attemptTime" {
+		sortText = "question.first_attempt_time"
+	} else if sortOption == "createdTime" {
+		sortText = "question.creation_date"
+	} else if sortOption == "lastEditedTime" {
+		sortText = "question.last_edited_date"
 	}
 
 	sortDirectionInt, err := strconv.Atoi(sortDirection)

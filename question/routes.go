@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"reflect"
 	"strconv"
-	"strings"
+	"time"
 
 	// replace with your project path
 	// replace with your project path
@@ -310,17 +310,30 @@ func updateQuestion(c *gin.Context) {
 	}
 
 	// Parse the request body
-	var questionUpdate Question
+	var questionUpdate bson.M
 	if err := c.ShouldBindJSON(&questionUpdate); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Create the update object
-	update := questionToUpdateBsonM(questionUpdate)
+	// Print the questionUpdate map
+	fmt.Printf("questionUpdate: %+v\n", questionUpdate)
+
+	// Set the LastEditedDate to the current date and time
+	questionUpdate["last_edited_date"] = time.Now().UTC()
+
+	// If CreationDate is not provided, fetch the existing question to get its CreationDate
+	if _, ok := questionUpdate["creation_date"]; !ok {
+		existingQuestion, err := questionService.GetQuestionByID(c.Request.Context(), id)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		questionUpdate["creation_date"] = existingQuestion.CreationDate
+	}
 
 	// Update the question
-	result, err := questionService.UpdateQuestion(c, id, update)
+	result, err := questionService.UpdateQuestion(c.Request.Context(), id, questionUpdate)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -330,26 +343,55 @@ func updateQuestion(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-// questionToUpdateBsonM creates a bson.M object from a Question
-func questionToUpdateBsonM(q Question) bson.M {
+func toBsonM(question Question) bson.M {
 	update := bson.M{}
-	val := reflect.ValueOf(q)
-	typ := val.Type()
+	v := reflect.ValueOf(question)
+	typeOfQuestion := v.Type()
 
-	for i := 0; i < val.NumField(); i++ {
-		field := val.Field(i)
-		if field.IsNil() { // Skip nil fields
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		fieldName := typeOfQuestion.Field(i).Tag.Get("bson")
+		if fieldName == "" || fieldName == "-" {
 			continue
 		}
-
-		fieldName := typ.Field(i).Tag.Get("bson")
-		if fieldName == "" { // If bson tag is not set, use the struct field name
-			fieldName = strings.ToLower(typ.Field(i).Name)
+		fieldName = fieldName[:len(fieldName)-9] // remove ",omitempty"
+		if field.Kind() == reflect.Ptr && !field.IsNil() {
+			update[fieldName] = field.Elem().Interface()
+		} else if field.Kind() != reflect.Ptr && field.IsValid() && !field.IsZero() {
+			update[fieldName] = field.Interface()
 		}
+	}
 
-		// Remove ",omitempty" from the field name, if present
-		fieldName = strings.Split(fieldName, ",")[0]
-		update[fieldName] = field.Elem().Interface()
+	return update
+}
+
+// Helper function to convert a map to a struct
+func mapToStruct(data map[string]interface{}, result interface{}) error {
+	bsonBytes, err := bson.Marshal(data)
+	if err != nil {
+		return err
+	}
+	return bson.Unmarshal(bsonBytes, result)
+}
+
+// questionToUpdateBsonM creates a bson.M object from a Question
+func questionToUpdateBsonM(question Question) bson.M {
+	update := bson.M{}
+	v := reflect.ValueOf(question)
+	typeOfQuestion := v.Type()
+
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		fieldName := typeOfQuestion.Field(i).Name
+
+		// Only set non-zero and non-nil fields
+		if field.Kind() == reflect.Ptr || field.Kind() == reflect.Slice || field.Kind() == reflect.Map || field.Kind() == reflect.Interface || field.Kind() == reflect.Chan {
+			if !field.IsNil() {
+				update[fieldName] = field.Interface()
+			}
+		} else if field.IsValid() && !field.IsZero() {
+			update[fieldName] = field.Interface()
+		}
 	}
 
 	return update
