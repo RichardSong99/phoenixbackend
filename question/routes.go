@@ -4,7 +4,6 @@ import (
 	"example/goserver/user"
 	"fmt"
 	"net/http"
-	"reflect"
 	"strconv"
 	"time"
 
@@ -46,6 +45,11 @@ func createQuestion(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	// Set the creation and last edited dates to the current time
+	currentTime := time.Now()
+	question.CreationDate = currentTime
+	question.LastEditedDate = currentTime
 
 	result, err := questionService.CreateQuestion(c, &question)
 	if err != nil {
@@ -310,30 +314,30 @@ func updateQuestion(c *gin.Context) {
 	}
 
 	// Parse the request body
-	var questionUpdate bson.M
+	var questionUpdate map[string]interface{}
 	if err := c.ShouldBindJSON(&questionUpdate); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Print the questionUpdate map
-	fmt.Printf("questionUpdate: %+v\n", questionUpdate)
+	// Normalize the field names to match the existing schema
+	normalizedUpdate := normalizeFieldNames(questionUpdate)
 
 	// Set the LastEditedDate to the current date and time
-	questionUpdate["last_edited_date"] = time.Now().UTC()
+	normalizedUpdate["last_edited_date"] = time.Now().UTC()
 
 	// If CreationDate is not provided, fetch the existing question to get its CreationDate
-	if _, ok := questionUpdate["creation_date"]; !ok {
+	if _, ok := normalizedUpdate["creation_date"]; !ok {
 		existingQuestion, err := questionService.GetQuestionByID(c.Request.Context(), id)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		questionUpdate["creation_date"] = existingQuestion.CreationDate
+		normalizedUpdate["creation_date"] = existingQuestion.CreationDate
 	}
 
 	// Update the question
-	result, err := questionService.UpdateQuestion(c.Request.Context(), id, questionUpdate)
+	result, err := questionService.UpdateQuestion(c.Request.Context(), id, normalizedUpdate)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -343,58 +347,46 @@ func updateQuestion(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-func toBsonM(question Question) bson.M {
-	update := bson.M{}
-	v := reflect.ValueOf(question)
-	typeOfQuestion := v.Type()
+// normalizeFieldNames converts the incoming JSON field names to match the existing schema
+func normalizeFieldNames(update map[string]interface{}) bson.M {
+	normalized := bson.M{}
 
-	for i := 0; i < v.NumField(); i++ {
-		field := v.Field(i)
-		fieldName := typeOfQuestion.Field(i).Tag.Get("bson")
-		if fieldName == "" || fieldName == "-" {
-			continue
-		}
-		fieldName = fieldName[:len(fieldName)-9] // remove ",omitempty"
-		if field.Kind() == reflect.Ptr && !field.IsNil() {
-			update[fieldName] = field.Elem().Interface()
-		} else if field.Kind() != reflect.Ptr && field.IsValid() && !field.IsZero() {
-			update[fieldName] = field.Interface()
-		}
-	}
-
-	return update
-}
-
-// Helper function to convert a map to a struct
-func mapToStruct(data map[string]interface{}, result interface{}) error {
-	bsonBytes, err := bson.Marshal(data)
-	if err != nil {
-		return err
-	}
-	return bson.Unmarshal(bsonBytes, result)
-}
-
-// questionToUpdateBsonM creates a bson.M object from a Question
-func questionToUpdateBsonM(question Question) bson.M {
-	update := bson.M{}
-	v := reflect.ValueOf(question)
-	typeOfQuestion := v.Type()
-
-	for i := 0; i < v.NumField(); i++ {
-		field := v.Field(i)
-		fieldName := typeOfQuestion.Field(i).Name
-
-		// Only set non-zero and non-nil fields
-		if field.Kind() == reflect.Ptr || field.Kind() == reflect.Slice || field.Kind() == reflect.Map || field.Kind() == reflect.Interface || field.Kind() == reflect.Chan {
-			if !field.IsNil() {
-				update[fieldName] = field.Interface()
-			}
-		} else if field.IsValid() && !field.IsZero() {
-			update[fieldName] = field.Interface()
+	for key, value := range update {
+		switch key {
+		case "Prompt":
+			normalized["prompt"] = value
+		case "AnswerType":
+			normalized["answer_type"] = value
+		case "AnswerChoices":
+			normalized["answer_choices"] = value
+		case "CorrectAnswerMultiple":
+			normalized["correct_answer_multiple"] = value
+		case "CorrectAnswerFree":
+			normalized["correct_answer_free"] = value
+		case "Text":
+			normalized["text"] = value
+		case "Subject":
+			normalized["subject"] = value
+		case "Topic":
+			normalized["topic"] = value
+		case "Difficulty":
+			normalized["difficulty"] = value
+		case "AccessOption":
+			normalized["access_option"] = value
+		case "Explanation":
+			normalized["explanation"] = value
+		case "Images":
+			normalized["images"] = value
+		case "CreationDate":
+			normalized["creation_date"] = value
+		case "LastEditedDate":
+			normalized["last_edited_date"] = value
+		default:
+			normalized[key] = value
 		}
 	}
 
-	return update
+	return normalized
 }
 
 // deleteQuestion handles the DELETE /questions/:id route

@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"example/goserver/dataaggregation"
+	"example/goserver/engagement"
 	"example/goserver/user"
+
 	"fmt"
-	"math/rand"
 	"reflect"
 	"sort"
 	"strconv"
@@ -623,6 +624,7 @@ func (s *QuestionService) GetQuestions(ctx context.Context, difficulties string,
 	}
 
 	pipeline = s.addFirstAttemptTimeToPipeline(pipeline)
+
 	fmt.Println("Pipeline after add first attempt time: ", pipeline)
 
 	// add difficulty levels
@@ -636,9 +638,9 @@ func (s *QuestionService) GetQuestions(ctx context.Context, difficulties string,
 		pipeline = s.addAnswerStatusFilterToPipeline(pipeline, answerStatus)
 	}
 
-	// fmt.Println("Pipeline: ", pipeline)
-
 	pipeline = s.addMatchAndSortStagesToPipeline(pipeline, sortOption, sortDirection)
+
+	pipeline = append(pipeline, generateProjectStage())
 
 	countPipeline := make([]bson.M, len(pipeline))
 	copy(countPipeline, pipeline)
@@ -749,6 +751,22 @@ func (s *QuestionService) addFirstAttemptTimeToPipeline(pipeline []bson.M) []bso
 				"$cond": bson.M{
 					"if":   bson.M{"$gt": bson.A{bson.M{"$size": "$engagements"}, 0}},
 					"then": bson.M{"$arrayElemAt": bson.A{"$engagements.attempt_time", 0}},
+					"else": nil,
+				},
+			},
+		},
+	})
+
+	return pipeline
+}
+
+func (S *QuestionService) addEngagementIdToPipeline(pipeline []bson.M) []bson.M {
+	pipeline = append(pipeline, bson.M{
+		"$addFields": bson.M{
+			"engagement_id": bson.M{
+				"$cond": bson.M{
+					"if":   bson.M{"$gt": bson.A{bson.M{"$size": "$engagements"}, 0}},
+					"then": bson.M{"$arrayElemAt": bson.A{"$engagements._id", 0}},
 					"else": nil,
 				},
 			},
@@ -1004,6 +1022,73 @@ func (s *QuestionService) executePipelineGeneric(ctx context.Context, pipeline [
 	return results, nil
 }
 
+func generateProjectStage() bson.M {
+
+	return bson.M{
+		"$project": bson.M{
+			"Question": bson.M{
+				"id":                    "$question._id",
+				"Prompt":                "$question.prompt",
+				"AnswerType":            "$question.answer_type",
+				"AnswerChoices":         "$question.answer_choices",
+				"CorrectAnswerMultiple": "$question.correct_answer_multiple",
+				"CorrectAnswerFree":     "$question.correct_answer_free",
+				"Text":                  "$question.text",
+				"Subject":               "$question.subject",
+				"Topic":                 "$question.topic",
+				"Difficulty":            "$question.difficulty",
+				"AccessOption":          "$question.access_option",
+				"Explanation":           "$question.explanation",
+				"Images":                "$question.images",
+				"CreationDate":          "$question.creation_date",
+				"LastEditedDate":        "$question.last_edited_date",
+				"DifficultyLevel":       "$question.difficultyLevel",
+			},
+			"Engagement": bson.M{
+				"$cond": bson.M{
+					"if": bson.M{"$gt": []interface{}{bson.M{"$size": "$question.engagements"}, 0}},
+					"then": bson.M{
+						"id":          bson.M{"$arrayElemAt": []interface{}{"$question.engagements._id", 0}},
+						"QuestionID":  bson.M{"$arrayElemAt": []interface{}{"$question.engagements.question_id", 0}},
+						"UserID":      bson.M{"$arrayElemAt": []interface{}{"$question.engagements.user_id", 0}},
+						"Flagged":     bson.M{"$arrayElemAt": []interface{}{"$question.engagements.flagged", 0}},
+						"UserAnswer":  bson.M{"$arrayElemAt": []interface{}{"$question.engagements.user_answer", 0}},
+						"Status":      bson.M{"$arrayElemAt": []interface{}{"$question.engagements.status", 0}},
+						"AttemptTime": bson.M{"$arrayElemAt": []interface{}{"$question.engagements.attempt_time", 0}},
+						"Duration":    bson.M{"$arrayElemAt": []interface{}{"$question.engagements.duration", 0}},
+						"Mode":        bson.M{"$arrayElemAt": []interface{}{"$question.engagements.mode", 0}},
+					},
+					"else": nil,
+				},
+			},
+		},
+	}
+
+}
+
+func generateEngagementFields() bson.M {
+	engagementFields := generateFieldsMap(reflect.TypeOf(engagement.Engagement{}), "$engagements.")
+	fmt.Println("Engagement fields: ", engagementFields)
+	arrayElemAtFields := bson.M{}
+	for key, value := range engagementFields {
+		arrayElemAtFields[key] = bson.M{"$arrayElemAt": []interface{}{value, 0}}
+	}
+	return arrayElemAtFields
+}
+
+func generateFieldsMap(t reflect.Type, prefix string) bson.M {
+	fields := bson.M{}
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		bsonTag := field.Tag.Get("bson")
+		jsonTag := field.Tag.Get("json")
+		if bsonTag != "" && jsonTag != "" {
+			fields[jsonTag] = prefix + bsonTag
+		}
+	}
+	return fields
+}
+
 func (s *QuestionService) executePipeline(ctx context.Context, pipeline []bson.M) ([]*QuestionWithStatus, error) {
 	cursor, err := s.collection.Aggregate(ctx, pipeline)
 	if err != nil {
@@ -1141,14 +1226,6 @@ func constructFacetStage(userID *primitive.ObjectID) bson.M {
 	// }
 
 	return bson.M{"$facet": facets}
-}
-
-func shuffleQuestions(questions []*Question) []*Question {
-	rand.Seed(time.Now().UnixNano())
-	rand.Shuffle(len(questions), func(i, j int) {
-		questions[i], questions[j] = questions[j], questions[i]
-	})
-	return questions
 }
 
 // GetMaskedQuestions retrieves questions with specific fields from the database
