@@ -37,10 +37,8 @@ func NewQuizService(ctx context.Context, client *mongo.Client) (*QuizService, er
 func (qs *QuizService) InitializeQuiz(ctx context.Context, questionIDs []primitive.ObjectID, userID primitive.ObjectID, quizType *string, quizName *string) (primitive.ObjectID, error) {
 	// Create a new quiz
 	quiz := &Quiz{
-		UserID:           userID,
-		QuestionIDList:   questionIDs,
-		AttemptTime:      time.Now(),
-		EngagementIDList: nil,
+		UserID:      userID,
+		AttemptTime: time.Now(),
 	}
 
 	if quizType != nil {
@@ -49,6 +47,28 @@ func (qs *QuizService) InitializeQuiz(ctx context.Context, questionIDs []primiti
 
 	if quizName != nil {
 		quiz.Name = *quizName
+	}
+
+	// Create the question-engagement ID combos
+	// Initialize the slice if it doesn't exist
+	if quiz.QuestionEngagementIDCombos == nil {
+		quiz.QuestionEngagementIDCombos = []QuestionEngagementIDCombo{}
+	}
+
+	// Add new question IDs to the quiz
+	for _, questionID := range questionIDs {
+		found := false
+		for _, qeid := range quiz.QuestionEngagementIDCombos {
+			if qeid.QuestionID == &questionID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			quiz.QuestionEngagementIDCombos = append(quiz.QuestionEngagementIDCombos, QuestionEngagementIDCombo{
+				QuestionID: &questionID,
+			})
+		}
 	}
 
 	// Define the filter for the upsert operation
@@ -138,33 +158,51 @@ func (qs *QuizService) GetQuizzesForUser(ctx context.Context, userID primitive.O
 	return quizzes, nil
 }
 
-func (qs *QuizService) UpdateQuiz(ctx context.Context, quizID, engagementID primitive.ObjectID) (primitive.ObjectID, error) {
-	// Create an update to add the engagement ID to the list of engagement IDs
-	// do not add the same engagement ID to the list
-	quiz, err := qs.GetQuiz(ctx, quizID)
+func (qs *QuizService) UpdateQuiz(ctx context.Context, quizID, questionID, engagementID *primitive.ObjectID) (primitive.ObjectID, error) {
+	// Fetch the quiz
+	quiz, err := qs.GetQuiz(ctx, *quizID)
 	if err != nil {
 		return primitive.NilObjectID, fmt.Errorf("error getting quiz: %w", err)
 	}
 
-	// Check if the engagement ID already exists in the quiz
-	for _, id := range quiz.EngagementIDList {
-		if id == engagementID {
-			// If engagement already exists, return the existing quiz ID without updating
-			return quizID, nil
+	// Check if the question ID is in the quiz
+	questionFound := false
+	for i, qeid := range quiz.QuestionEngagementIDCombos {
+		if qeid.QuestionID == questionID {
+			questionFound = true
+
+			// Check if the engagement ID is already associated with this question
+			if qeid.EngagementID == nil || qeid.EngagementID != engagementID {
+				// Update the engagement ID for the existing question
+				quiz.QuestionEngagementIDCombos[i].EngagementID = engagementID
+			}
+			break
 		}
+	}
+
+	if !questionFound {
+		// Add a new entry if the question ID was not found
+		quiz.QuestionEngagementIDCombos = append(quiz.QuestionEngagementIDCombos, QuestionEngagementIDCombo{
+			QuestionID:   questionID,
+			EngagementID: engagementID,
+		})
 	}
 
 	// Define the filter to update the quiz
 	filter := bson.M{"_id": quizID}
 
 	// Define the update operation
-	update := bson.M{"$push": bson.M{"engagement_id_list": engagementID}}
+	update := bson.M{
+		"$set": bson.M{
+			"question_engagement_combos": quiz.QuestionEngagementIDCombos,
+		},
+	}
 
-	// Update the quiz
+	// Update the quiz in the database
 	_, err = qs.collection.UpdateOne(ctx, filter, update)
 	if err != nil {
 		return primitive.NilObjectID, fmt.Errorf("error updating quiz: %w", err)
 	}
 
-	return quizID, nil
+	return *quizID, nil
 }

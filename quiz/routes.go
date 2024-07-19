@@ -101,23 +101,10 @@ func (s *QuizService) InitializeQuizHelper(c context.Context, questionIDList []s
 func updateQuiz(service *QuizService) gin.HandlerFunc {
 	// request body should contain the quizID and an engagement ID
 	return func(c *gin.Context) {
-		// Add code to update a quiz
-		// the input will be a quizID and an engagementID
-		// the output will be a quizID
 
-		// userID, exists := c.Get("userID")
-		// var userIDObj *primitive.ObjectID
-
-		// if exists {
-		// 	// Convert userID to *primitive.ObjectID
-		// 	userIDObjTemp, err := primitive.ObjectIDFromHex(userID.(string))
-		// 	if err != nil {
-		// 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID"})
-		// 		return
-		// 	}
-		// 	userIDObj = &userIDObjTemp
-
+		questionID, err := primitive.ObjectIDFromHex(c.Param("questionID"))
 		engagementID, err := primitive.ObjectIDFromHex(c.Param("engagementID"))
+
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid engagement ID"})
 			return
@@ -129,7 +116,7 @@ func updateQuiz(service *QuizService) gin.HandlerFunc {
 			return
 		}
 
-		quizID, err = service.UpdateQuiz(c, quizID, engagementID)
+		quizID, err = service.UpdateQuiz(c, &quizID, &questionID, &engagementID)
 
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -252,6 +239,9 @@ func getQuizzesUnderlyingForUser(service *QuizService, questionService *question
 
 func GetQuizzesUnderlyingForUser(ctx context.Context, service *QuizService, questionService *question.QuestionService, engagementService *engagement.EngagementService) ([]*QuizResult, error) {
 	userID, exists := ctx.Value("userID").(string)
+
+	fmt.Println("userID: ", userID)
+
 	if !exists {
 		return nil, errors.New("user ID not found in context")
 	}
@@ -269,12 +259,20 @@ func GetQuizzesUnderlyingForUser(ctx context.Context, service *QuizService, ques
 		return nil, err
 	}
 
+	fmt.Println("quizzes length: ", len(quizzes))
+
+	// Print the actual quizzes to inspect their contents
+	for i, quiz := range quizzes {
+		fmt.Printf("Quiz %d: %+v\n", i, quiz)
+	}
+
 	results := make([]*QuizResult, len(quizzes))
 	for i, quiz := range quizzes {
 		result, err := service.GetQuizUnderlying(ctx, service, questionService, engagementService, *quiz)
 		if err != nil {
 			return nil, err
 		}
+		fmt.Println("quiz result i: ", i)
 		results[i] = result
 	}
 
@@ -283,40 +281,34 @@ func GetQuizzesUnderlyingForUser(ctx context.Context, service *QuizService, ques
 
 func (s *QuizService) GetQuizUnderlying(ctx context.Context, service *QuizService, questionService *question.QuestionService, engagementService *engagement.EngagementService, quiz Quiz) (*QuizResult, error) {
 
-	questions := make([]question.Question, len(quiz.QuestionIDList))
+	questionEngagementCombos := make([]QuestionEngagementCombo, len(quiz.QuestionEngagementIDCombos))
 
-	for i, questionID := range quiz.QuestionIDList {
-		question, err := questionService.GetQuestionByID(ctx, questionID)
+	// for each question engagement combo in the quiz, get the question and engagement
+	for i, qeid := range quiz.QuestionEngagementIDCombos {
+		question, err := questionService.GetQuestion(ctx, *qeid.QuestionID)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error getting question: %w", err)
 		}
-		questions[i] = *question
-	}
 
-	questionEngagementCombos := make([]QuestionEngagementCombo, len(questions))
-	for i, question := range questions {
-		localQuestion := question
-		found := false
-		for _, engagementID := range quiz.EngagementIDList {
-			localEngagementID := engagementID
-			engagement, err := engagementService.GetEngagementByID(ctx, localEngagementID)
+		if qeid.EngagementID != nil {
+			engagement, err := engagementService.GetEngagementByID(ctx, *qeid.EngagementID)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("error getting engagement: %w", err)
 			}
 
-			if engagement.QuestionID.Hex() == localQuestion.ID.Hex() {
-				questionEngagementCombos[i] = QuestionEngagementCombo{Question: &localQuestion, Engagement: engagement}
-				found = true
-				break
+			questionEngagementCombos[i] = QuestionEngagementCombo{
+				Question:   question,
+				Engagement: engagement,
 			}
-		}
-
-		if !found {
-			questionEngagementCombos[i] = QuestionEngagementCombo{Question: &localQuestion, Engagement: nil}
+		} else {
+			questionEngagementCombos[i] = QuestionEngagementCombo{
+				Question:   question,
+				Engagement: nil,
+			}
 		}
 	}
 
-	numTotal := len(questions)
+	numTotal := len(quiz.QuestionEngagementIDCombos)
 	numAnswered := 0
 	numCorrect := 0
 	numIncorrect := 0

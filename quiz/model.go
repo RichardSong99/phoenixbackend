@@ -10,18 +10,22 @@ import (
 )
 
 type Quiz struct {
-	ID               primitive.ObjectID   `json:"id,omitempty" bson:"_id,omitempty"`
-	Name             string               `json:"Name,omitempty" bson:"name,omitempty"`
-	Type             string               `json:"Type,omitempty" bson:"type,omitempty"`
-	UserID           primitive.ObjectID   `json:"UserID,omitempty" bson:"user_id,omitempty"`
-	AttemptTime      time.Time            `json:"AttemptTime,omitempty" bson:"attempt_time,omitempty"`
-	QuestionIDList   []primitive.ObjectID `json:"QuestionIDList,omitempty" bson:"question_id_list,omitempty"`
-	EngagementIDList []primitive.ObjectID `json:"EngagementIDList,omitempty" bson:"engagement_id_list,omitempty"`
+	ID                         primitive.ObjectID          `json:"id,omitempty" bson:"_id,omitempty"`
+	Name                       string                      `json:"name,omitempty" bson:"name,omitempty"`
+	Type                       string                      `json:"type,omitempty" bson:"type,omitempty"`
+	UserID                     primitive.ObjectID          `json:"userID,omitempty" bson:"user_id,omitempty"`
+	AttemptTime                time.Time                   `json:"attempt_time,omitempty" bson:"attempt_time,omitempty"`
+	QuestionEngagementIDCombos []QuestionEngagementIDCombo `json:"question_engagement_combos,omitempty" bson:"question_engagement_combos,omitempty"`
 }
 
 type QuestionEngagementCombo struct {
 	Question   *question.Question     `json:"Question"`
 	Engagement *engagement.Engagement `"json:Engagement`
+}
+
+type QuestionEngagementIDCombo struct {
+	QuestionID   *primitive.ObjectID `json:"question_id" bson:"question_id"`
+	EngagementID *primitive.ObjectID `json:"engagement_id" bson:"engagement_id"`
 }
 
 type QuizResult struct {

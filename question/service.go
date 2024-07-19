@@ -1061,9 +1061,9 @@ func generateProjectStage() bson.M {
 					"else": nil,
 				},
 			},
+			"status": "$status",
 		},
 	}
-
 }
 
 func generateEngagementFields() bson.M {
