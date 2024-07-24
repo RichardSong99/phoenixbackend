@@ -116,18 +116,28 @@ func LogEngagementsHandler(service *EngagementService) gin.HandlerFunc {
 			return
 		}
 
-		// Set the UserID in each engagement
+		// Create a slice to store the mappings of QuestionID to EngagementID
+		var questionEngagementIDs []map[string]string
+
+		// Set the UserID in each engagement and log it
 		for i := range engagements {
 			engagements[i].UserID = &userIDObjID
-			// use the LogEngagement Function to log each engagement
 			id, err := service.LogEngagement(c, &engagements[i])
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
+			questionEngagementIDs = append(questionEngagementIDs, map[string]string{
+				"QuestionID":   engagements[i].QuestionID.Hex(), // Assuming QuestionID is a primitive.ObjectID
+				"EngagementID": id,
+			})
 			fmt.Println("Engagement logged successfully", id)
 		}
-		c.JSON(http.StatusOK, gin.H{"message": "Engagements logged successfully"})
+
+		c.JSON(http.StatusOK, gin.H{
+			"message":               "Engagements logged successfully",
+			"questionEngagementIDs": questionEngagementIDs,
+		})
 	}
 }
 

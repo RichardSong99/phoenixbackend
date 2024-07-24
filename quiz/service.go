@@ -215,50 +215,20 @@ func (qs *QuizService) UpdateQuizWithCombos(ctx context.Context, quizID primitiv
 		return primitive.NilObjectID, fmt.Errorf("error finding quiz: %w", err)
 	}
 
-	// Map of question IDs to engagement IDs for fast lookup
-	// comboMap := make(map[primitive.ObjectID]*primitive.ObjectID)
-	// for _, combo := range quiz.QuestionEngagementIDCombos {
-	// 	comboMap[*combo.QuestionID] = combo.EngagementID
-	// }
-
-	// // update the map with the new combos
-	// for _, combo := range qeidCombos {
-	// 	comboMap[*combo.QuestionID] = combo.EngagementID
-	// }
-
-	// // rebuild the question-engagement ID combos
-	// // rebuild the question-engagement ID combos
-	// var newCombos []QuestionEngagementIDCombo
-	// for questionID, engagementID := range comboMap {
-	// 	qIDCopy := questionID // Avoid referencing the same memory
-	// 	var eIDCopy *primitive.ObjectID
-	// 	if engagementID != nil {
-	// 		eIDCopyCopy := *engagementID // Avoid referencing the same memory
-	// 		eIDCopy = &eIDCopyCopy
-	// 	}
-	// 	newCombos = append(newCombos, QuestionEngagementIDCombo{
-	// 		QuestionID:   &qIDCopy,
-	// 		EngagementID: eIDCopy,
-	// 	})
-	// }
-
-	// create a map to track existing question IDs
-	existingQuestions := make(map[primitive.ObjectID]bool)
-	for _, combo := range quiz.QuestionEngagementIDCombos {
-		existingQuestions[*combo.QuestionID] = true
+	// Create a map to track existing question IDs
+	existingQuestions := make(map[primitive.ObjectID]int)
+	for i, combo := range quiz.QuestionEngagementIDCombos {
+		existingQuestions[*combo.QuestionID] = i
 	}
 
-	// append the new combos to the end of the list
+	// Update existing entries or append new ones to the list
 	for _, combo := range qeidCombos {
-		if _, ok := existingQuestions[*combo.QuestionID]; !ok {
-			quiz.QuestionEngagementIDCombos = append(quiz.QuestionEngagementIDCombos, combo)
+		if idx, exists := existingQuestions[*combo.QuestionID]; exists {
+			// Update existing entry
+			quiz.QuestionEngagementIDCombos[idx].EngagementID = combo.EngagementID
 		} else {
-			for i, qeid := range quiz.QuestionEngagementIDCombos {
-				if qeid.QuestionID == combo.QuestionID {
-					quiz.QuestionEngagementIDCombos[i].EngagementID = combo.EngagementID
-				}
-			}
-
+			// Append new entry
+			quiz.QuestionEngagementIDCombos = append(quiz.QuestionEngagementIDCombos, combo)
 		}
 	}
 
