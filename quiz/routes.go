@@ -18,7 +18,8 @@ import (
 func RegisterRoutes(publicRouter *gin.RouterGroup, service *QuizService, questionService *question.QuestionService, engagementService *engagement.EngagementService) {
 	// Add this line to create a new route for getQuiz
 	publicRouter.POST("/quiz", initializeQuiz(service))
-	publicRouter.PATCH("/quizzes/:quizID/engagements/:engagementID", updateQuiz(service))
+	// publicRouter.PATCH("/quizzes/:quizID/engagements/:engagementID", updateQuiz(service))
+	publicRouter.PATCH("/quiz/:quizID", updateQuizHandler(service))
 	publicRouter.GET("/quiz", getQuiz(service))
 	publicRouter.GET("/quiz/:id/underlying", getQuizUnderlying(service, questionService, engagementService))
 	publicRouter.GET("/quizzes", getQuizzesForUser(service))
@@ -98,15 +99,12 @@ func (s *QuizService) InitializeQuizHelper(c context.Context, questionIDList []s
 	return quizID, nil
 }
 
-func updateQuiz(service *QuizService) gin.HandlerFunc {
-	// request body should contain the quizID and an engagement ID
+func updateQuizHandler(service *QuizService) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		var req UpdateQuizQEIDCombo
 
-		questionID, err := primitive.ObjectIDFromHex(c.Param("questionID"))
-		engagementID, err := primitive.ObjectIDFromHex(c.Param("engagementID"))
-
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid engagement ID"})
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -116,17 +114,52 @@ func updateQuiz(service *QuizService) gin.HandlerFunc {
 			return
 		}
 
-		quizID, err = service.UpdateQuiz(c, &quizID, &questionID, &engagementID)
-
+		// call UpdateQuizWithCombos to update the quiz
+		quizID, err = service.UpdateQuizWithCombos(c.Request.Context(), quizID, req.QEIDArray)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
 		c.JSON(http.StatusOK, gin.H{"quizID": quizID})
-
 	}
 }
+
+// func updateQuiz(service *QuizService) gin.HandlerFunc {
+// 	// request body should contain the quizID and an engagement ID
+// 	return func(c *gin.Context) {
+
+// 		questionID, err := primitive.ObjectIDFromHex(c.Param("questionID"))
+
+// 		if err != nil {
+// 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid question ID"})
+// 			return
+// 		}
+
+// 		engagementID, err := primitive.ObjectIDFromHex(c.Param("engagementID"))
+
+// 		if err != nil {
+// 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid engagement ID"})
+// 			return
+// 		}
+
+// 		quizID, err := primitive.ObjectIDFromHex(c.Param("quizID"))
+// 		if err != nil {
+// 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid quiz ID"})
+// 			return
+// 		}
+
+// 		quizID, err = service.UpdateQuiz(c, &quizID, &questionID, &engagementID)
+
+// 		if err != nil {
+// 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+// 			return
+// 		}
+
+// 		c.JSON(http.StatusOK, gin.H{"quizID": quizID})
+
+// 	}
+// }
 
 func getQuiz(service *QuizService) gin.HandlerFunc {
 
@@ -266,11 +299,14 @@ func GetQuizzesUnderlyingForUser(ctx context.Context, service *QuizService, ques
 		fmt.Printf("Quiz %d: %+v\n", i, quiz)
 	}
 
+	// results := make([]*QuizResult)
+	// initialize results as an empty slice of QuizResults, with initial length of 0
 	results := make([]*QuizResult, len(quizzes))
 	for i, quiz := range quizzes {
 		result, err := service.GetQuizUnderlying(ctx, service, questionService, engagementService, *quiz)
 		if err != nil {
-			return nil, err
+			//skip this quiz
+			continue
 		}
 		fmt.Println("quiz result i: ", i)
 		results[i] = result

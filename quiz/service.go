@@ -206,3 +206,77 @@ func (qs *QuizService) UpdateQuiz(ctx context.Context, quizID, questionID, engag
 
 	return *quizID, nil
 }
+
+func (qs *QuizService) UpdateQuizWithCombos(ctx context.Context, quizID primitive.ObjectID, qeidCombos []QuestionEngagementIDCombo) (primitive.ObjectID, error) {
+	// Define the filter to update the quiz
+	var quiz Quiz
+
+	if err := qs.collection.FindOne(ctx, bson.M{"_id": quizID}).Decode(&quiz); err != nil {
+		return primitive.NilObjectID, fmt.Errorf("error finding quiz: %w", err)
+	}
+
+	// Map of question IDs to engagement IDs for fast lookup
+	// comboMap := make(map[primitive.ObjectID]*primitive.ObjectID)
+	// for _, combo := range quiz.QuestionEngagementIDCombos {
+	// 	comboMap[*combo.QuestionID] = combo.EngagementID
+	// }
+
+	// // update the map with the new combos
+	// for _, combo := range qeidCombos {
+	// 	comboMap[*combo.QuestionID] = combo.EngagementID
+	// }
+
+	// // rebuild the question-engagement ID combos
+	// // rebuild the question-engagement ID combos
+	// var newCombos []QuestionEngagementIDCombo
+	// for questionID, engagementID := range comboMap {
+	// 	qIDCopy := questionID // Avoid referencing the same memory
+	// 	var eIDCopy *primitive.ObjectID
+	// 	if engagementID != nil {
+	// 		eIDCopyCopy := *engagementID // Avoid referencing the same memory
+	// 		eIDCopy = &eIDCopyCopy
+	// 	}
+	// 	newCombos = append(newCombos, QuestionEngagementIDCombo{
+	// 		QuestionID:   &qIDCopy,
+	// 		EngagementID: eIDCopy,
+	// 	})
+	// }
+
+	// create a map to track existing question IDs
+	existingQuestions := make(map[primitive.ObjectID]bool)
+	for _, combo := range quiz.QuestionEngagementIDCombos {
+		existingQuestions[*combo.QuestionID] = true
+	}
+
+	// append the new combos to the end of the list
+	for _, combo := range qeidCombos {
+		if _, ok := existingQuestions[*combo.QuestionID]; !ok {
+			quiz.QuestionEngagementIDCombos = append(quiz.QuestionEngagementIDCombos, combo)
+		} else {
+			for i, qeid := range quiz.QuestionEngagementIDCombos {
+				if qeid.QuestionID == combo.QuestionID {
+					quiz.QuestionEngagementIDCombos[i].EngagementID = combo.EngagementID
+				}
+			}
+
+		}
+	}
+
+	// Define the filter to update the quiz
+	filter := bson.M{"_id": quizID}
+
+	// Define the update operation
+	update := bson.M{
+		"$set": bson.M{
+			"question_engagement_id_combos": quiz.QuestionEngagementIDCombos,
+		},
+	}
+
+	// Update the quiz in the database
+	_, err := qs.collection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return primitive.NilObjectID, fmt.Errorf("error updating quiz: %w", err)
+	}
+
+	return quizID, nil
+}

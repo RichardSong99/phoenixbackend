@@ -26,4 +26,6 @@ type Engagement struct {
 	AttemptTime time.Time           `bson:"attempt_time,omitempty" json:"AttemptTime,omitempty"`
 	Duration    time.Duration       `bson:"duration,omitempty" json:"Duration,omitempty"`
 	Mode        *string             `bson:"mode,omitempty" json:"Mode,omitempty"`
+	Starred     *bool               `bson:"starred,omitempty" json:"Starred,omitempty"`
+	Reviewed    *bool               `bson:"reviewed,omitempty" json:"Reviewed,omitempty"`
 }
