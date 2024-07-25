@@ -17,10 +17,38 @@ func RegisterRoutes(r *gin.Engine, engagementService *EngagementService) {
 
 	r.GET("/engagement/:id", GetEngagementByIDHandler(engagementService))
 	r.GET("/engagement", GetEngagementHandler(engagementService)) // New route for getting engagement by ID
+	r.GET("/engagements", GetEngagementsByIDHandler(engagementService))
 	r.PATCH("/engagement/:id", UpdateEngagementHandler(engagementService))
 
 }
 
+// handler function for getting a set of engagements by their IDs
+func GetEngagementsByIDHandler(service *EngagementService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ids := c.QueryArray("ids")
+
+		// Convert the IDs to primitive.ObjectIDs
+		var objIDs []primitive.ObjectID
+		for _, id := range ids {
+			objID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+				return
+			}
+			objIDs = append(objIDs, objID)
+		}
+
+		engagements, err := service.GetEngagementsByID(c, objIDs)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, engagements)
+	}
+}
+
+// GetEngagementHandler is a gin HandlerFunc that gets an engagement by user and question ID
 func GetEngagementHandler(service *EngagementService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID, exists := c.Get("userID")

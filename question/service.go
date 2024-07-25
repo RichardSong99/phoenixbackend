@@ -79,7 +79,21 @@ func (s *QuestionService) GetQuestionByID(ctx context.Context, id primitive.Obje
 	return &question, nil
 }
 
-func (s *QuestionService) GetQuestionsByID(ctx context.Context, questionids []primitive.ObjectID, userID *primitive.ObjectID) ([]*QuestionWithStatus, error) {
+func (s *QuestionService) GetQuestionsByID(ctx context.Context, ids []primitive.ObjectID) ([]Question, error) {
+	cursor, err := s.collection.Find(ctx, bson.M{"_id": bson.M{"$in": ids}})
+	if err != nil {
+		return nil, err
+	}
+
+	var questions []Question
+	if err = cursor.All(ctx, &questions); err != nil {
+		return nil, err
+	}
+
+	return questions, nil
+}
+
+func (s *QuestionService) GetQuestionsByIDOld(ctx context.Context, questionids []primitive.ObjectID, userID *primitive.ObjectID) ([]*QuestionWithStatus, error) {
 	// Create the initial pipeline with the match stage
 	pipeline := []bson.M{
 		{"$match": bson.M{"_id": bson.M{"$in": questionids}}},

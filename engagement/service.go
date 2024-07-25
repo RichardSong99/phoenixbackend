@@ -70,6 +70,21 @@ func (es *EngagementService) GetEngagementByID(ctx context.Context, engagementID
 	return &engagement, nil
 }
 
+// GetEngagementsByID
+func (es *EngagementService) GetEngagementsByID(ctx context.Context, engagementIDs []primitive.ObjectID) ([]*Engagement, error) {
+	cursor, err := es.collection.Find(ctx, bson.M{"_id": bson.M{"$in": engagementIDs}})
+	if err != nil {
+		return nil, err
+	}
+
+	var engagements []*Engagement
+	if err = cursor.All(ctx, &engagements); err != nil {
+		return nil, err
+	}
+
+	return engagements, nil
+}
+
 // UpdateEngagement updates an engagement in the database
 func (es *EngagementService) UpdateEngagement(ctx context.Context, id string, update bson.M) (*mongo.UpdateResult, error) {
 	oid, err := primitive.ObjectIDFromHex(id)

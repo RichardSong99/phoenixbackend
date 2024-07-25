@@ -25,10 +25,10 @@ func RegisterRoutes(publicRouter *gin.RouterGroup, authRouter *gin.RouterGroup, 
 	// publicRouter.GET("/questions/masked", getMaskedQuestions(userService))
 
 	// Authenticated routes, only accessible to authenticated users
-	publicRouter.GET("/questions/:id", getQuestion(userService))
+	publicRouter.GET("/question/:id", getQuestion(userService))
 	publicRouter.GET("/questions", getQuestions(userService, questionService))
 	publicRouter.GET("/questions/data", getQuestionStatistics(questionService))
-	publicRouter.GET("/questionsbyid", getQuestionsByID(questionService))
+	publicRouter.GET("/questionsbyid", getQuestionsByIDHandler(questionService))
 	publicRouter.PUT("/questions", updateAllQuestions(questionService)) // Add this line
 
 	// Assuming these are admin-only routes, you can keep them under authenticated routes
@@ -90,7 +90,33 @@ func getQuestion(userService *user.UserService) gin.HandlerFunc {
 	}
 }
 
-func getQuestionsByID(questionService *QuestionService) gin.HandlerFunc {
+func getQuestionsByIDHandler(questionService *QuestionService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		questionIDs := c.QueryArray("ids")
+
+		// convert into array of object ids
+		var questionIDsObj []primitive.ObjectID
+		for _, id := range questionIDs {
+			idObj, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+				return
+			}
+			questionIDsObj = append(questionIDsObj, idObj)
+		}
+
+		questions, err := questionService.GetQuestionsByID(c, questionIDsObj)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, questions)
+	}
+}
+
+func getQuestionsByIDOld(questionService *QuestionService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID, exists := c.Get("userID")
 		var userIDObj *primitive.ObjectID
@@ -122,7 +148,7 @@ func getQuestionsByID(questionService *QuestionService) gin.HandlerFunc {
 			questionIDsObj = append(questionIDsObj, idObj)
 		}
 
-		questions, err := questionService.GetQuestionsByID(c, questionIDsObj, userIDObj)
+		questions, err := questionService.GetQuestionsByIDOld(c, questionIDsObj, userIDObj)
 
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
