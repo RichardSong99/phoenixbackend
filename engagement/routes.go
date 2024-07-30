@@ -17,10 +17,38 @@ func RegisterRoutes(r *gin.Engine, engagementService *EngagementService) {
 
 	r.GET("/engagement/:id", GetEngagementByIDHandler(engagementService))
 	r.GET("/engagement", GetEngagementHandler(engagementService)) // New route for getting engagement by ID
+	r.GET("/engagements", GetEngagementsByIDHandler(engagementService))
 	r.PATCH("/engagement/:id", UpdateEngagementHandler(engagementService))
 
 }
 
+// handler function for getting a set of engagements by their IDs
+func GetEngagementsByIDHandler(service *EngagementService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ids := c.QueryArray("ids")
+
+		// Convert the IDs to primitive.ObjectIDs
+		var objIDs []primitive.ObjectID
+		for _, id := range ids {
+			objID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+				return
+			}
+			objIDs = append(objIDs, objID)
+		}
+
+		engagements, err := service.GetEngagementsByID(c, objIDs)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, engagements)
+	}
+}
+
+// GetEngagementHandler is a gin HandlerFunc that gets an engagement by user and question ID
 func GetEngagementHandler(service *EngagementService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID, exists := c.Get("userID")
@@ -116,18 +144,28 @@ func LogEngagementsHandler(service *EngagementService) gin.HandlerFunc {
 			return
 		}
 
-		// Set the UserID in each engagement
+		// Create a slice to store the mappings of QuestionID to EngagementID
+		var questionEngagementIDs []map[string]string
+
+		// Set the UserID in each engagement and log it
 		for i := range engagements {
 			engagements[i].UserID = &userIDObjID
-			// use the LogEngagement Function to log each engagement
 			id, err := service.LogEngagement(c, &engagements[i])
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
+			questionEngagementIDs = append(questionEngagementIDs, map[string]string{
+				"QuestionID":   engagements[i].QuestionID.Hex(), // Assuming QuestionID is a primitive.ObjectID
+				"EngagementID": id,
+			})
 			fmt.Println("Engagement logged successfully", id)
 		}
-		c.JSON(http.StatusOK, gin.H{"message": "Engagements logged successfully"})
+
+		c.JSON(http.StatusOK, gin.H{
+			"message":               "Engagements logged successfully",
+			"questionEngagementIDs": questionEngagementIDs,
+		})
 	}
 }
 
