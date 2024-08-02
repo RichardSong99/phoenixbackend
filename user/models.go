@@ -12,4 +12,3 @@ type User struct {
 	PhoneNumber  string             `bson:"phone_number" json:"PhoneNumber"`
 	Tier         string             `bson:"tier" json:"Tier"`
 }
-

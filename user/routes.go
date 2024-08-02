@@ -145,7 +145,7 @@ func loginUser(c *gin.Context, userService *UserService) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"token": token})
+	c.JSON(http.StatusOK, gin.H{"token": token, "user_id": user.ID.Hex()})
 }
 
 func confirmUser(c *gin.Context, userService *UserService) {
