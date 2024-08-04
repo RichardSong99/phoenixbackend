@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"example/goserver/datacube"
 	"example/goserver/engagement"
 	"example/goserver/lessons"
 	"example/goserver/parameterdata"
@@ -52,9 +51,6 @@ func main() {
 
 	// Create a new EngagementService
 	engagementService := engagement.NewEngagementService(client) // Remove questionService parameter
-
-	// Create a new DataCubeService
-	dataCubeService := datacube.NewDataCubeService(client, questionService)
 
 	lessonService := lessons.NewLessonService(client)
 	courseService := lessons.NewCourseService(client)
@@ -126,8 +122,6 @@ func main() {
 
 	lessons.RegisterRoutes(publicRoutes, lessonService, courseService)
 
-	// Add the datacube routes
-	datacube.RegisterRoutes(publicRoutes, authenticated, dataCubeService)
 
 	parameterdata.RegisterRoutes(publicRoutes, nil)
 
